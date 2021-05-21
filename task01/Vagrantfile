@@ -15,8 +15,8 @@ Vagrant.configure("2") do |config|
   
   config.vm.provision "file", run: "always", source: "./01-demosite-php/index.php", destination: "/home/vagrant/01-demosite-php/index.php"
   config.vm.provision "file", run: "always", source: "./01-demosite-static/index.html", destination: "/home/vagrant/01-demosite-static/index.html"
-  config.vm.provision "file", run: "always", source: "./ports.conf", destination: "/home/vagrant/apache2/ports.conf"
-  config.vm.provision "file", run: "always", source: "./000-default.conf", destination: "/home/vagrant/sites-available/000-default.conf"
+  config.vm.provision "file", run: "always", source: "./apache_conf/ports.conf", destination: "/home/vagrant/apache2/ports.conf"
+  config.vm.provision "file", run: "always", source: "./apache_conf/000-default.conf", destination: "/home/vagrant/sites-available/000-default.conf"
   
     config.vm.provision "shell", inline: <<-SHELL
     apt-get install -y apache2
