@@ -1,0 +1,65 @@
+---
+#Playbook for task03-02 (Centos8 LXC - containers configuration)
+- hosts: all
+  connection: local
+  become: true
+
+  tasks:
+    - name: SSH key pub copy
+      set_fact:
+        my_ssh_key: "{{ lookup('env','HOME') }}/.ssh/id_rsa.pub"
+      
+    - name: Create containers
+      lxc_container:
+        name: "{{ inventory_hostname }}"
+        container_log: true
+        template: download
+        state: started
+        template_options:  --dist centos --release 8 --arch amd64
+        container_command: |
+          if [ ! -d ~/.ssh ]; then
+          mkdir ~/.ssh
+          echo "{{ lookup('file', my_ssh_key) }}" | tee -a ~/.ssh/authorized_keys
+          fi
+          sed -i 's/dhcp/none/' /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "IPADDR={{ ansible_host }}" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "PREFIX=24" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "GATEWAY=10.0.3.1" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "nameserver 10.0.3.1" >> /etc/resolv.conf
+          systemctl restart NetworkManager.service
+          yum install -y httpd
+          yum install -y php php-cli php-mysqlnd php-json php-gd php-ldap php-odbc php-pdo php-opcache php-pear php-xml php-xmlrpc php-mbstring php-snmp php-soap php-zip
+          yum install -y openssh-server
+          yum install -y python2
+          alternatives --set python /usr/bin/python2
+          systemctl start httpd && systemctl start php-fpm && systemctl start sshd
+          systemctl enable httpd && systemctl enable php-fpm && systemctl enable sshd
+
+- hosts: all
+  connection: local
+  become: true
+  tasks:
+  
+  - name: checking container key is up to date in known_hosts
+    shell: ssh-keygen -R {{ ansible_host }}; (ssh-keyscan {{ ansible_host }} >> ~/.ssh/known_hosts)
+  
+  - name: copying web-files to all containers
+    shell:
+      cmd:  scp -r /vagrant/web/ root@{{ ansible_host }}:/var/www/
+
+- hosts: centos1
+  connection: local
+  tasks:
+  - name: copying apache conf-files to 1st container
+    shell: scp /vagrant/apache_conf/01-demosite-static.conf root@{{ ansible_host }}:/etc/httpd/conf.d/
+
+- hosts: centos2
+  connection: local
+  tasks:
+  - name: copying apache conf-files to 2st container
+    shell: scp /vagrant/apache_conf/01-demosite-php.conf root@{{ ansible_host }}:/etc/httpd/conf.d/
+    
+- hosts: all
+  tasks:
+  - name: restart httpd
+    command: systemctl restart httpd

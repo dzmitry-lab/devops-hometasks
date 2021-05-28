@@ -1,0 +1,19 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/debian-10"
+
+  config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 81, host: 8081, host_ip: "127.0.0.1"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "debian10_lxc_vm"
+    vb.memory = "2048"
+  end
+#Provisioning configuration for Ansible.
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "debian10_lxc.yaml"
+	ansible.become = true
+ end
+end
