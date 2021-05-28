@@ -1,5 +1,5 @@
-power on vagrant VM (centos8 + lamp). vagrantfile has ansible_local provision.
-ansible playbook should pass without errors.
+power on vagrant VM (Debian10). vagrantfile has ansible_local provision.
+lxc-containers are configured with ansible (centos_lxc.yaml)
 
 test sites on host:
 127.0.0.1:8080
