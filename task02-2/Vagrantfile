@@ -2,13 +2,61 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "dzmitry-lab/task02-2_lxc_in_debian10"
+  config.vm.box = "debian/buster64"
 
   config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
   config.vm.network "forwarded_port", guest: 81, host: 8081, host_ip: "127.0.0.1"
 
   config.vm.provider "virtualbox" do |vb|
-    vb.name = "debian10_with_lxc_vagrant_vm"
+    vb.name = "debian10_task02_2"
     vb.memory = "2048"
   end
+    
+#prepare host vm
+    config.vm.provision "shell", inline: <<-SHELL
+    apt remove gnupg
+    apt install --reinstall gnupg2
+    apt install dirmngr
+    apt install -y lxc lxc-templates
+    sysctl kernel.unprivileged_userns_clone=1
+    echo "kernel.unprivileged_userns_clone=1" >> /etc/sysctl.conf
+	sed -i 's/GRUB_CMDLINE_LINUX="consoleblank=0"/GRUB_CMDLINE_LINUX="consoleblank=0 systemd.legacy_systemd_cgroup_controller=yes"/' /etc/default/grub
+	update-grub
+    echo "lxc.start.auto = 1
+lxc.net.0.type = veth
+lxc.net.0.flags = up
+lxc.net.0.link  = lxcbr0" >> /etc/lxc/default.conf
+	echo "vagrant veth lxcbr0 10" > /etc/lxc/lxc-usernet
+	echo "USE_LXC_BRIDGE="true"
+LXC_BRIDGE="lxcbr0"
+LXC_ADDR="10.0.3.1"
+LXC_NETMASK="255.255.255.0"
+LXC_NETWORK="10.0.3.0/24"
+LXC_DHCP_RANGE="10.0.3.2,10.0.3.254"
+LXC_DHCP_MAX="253"
+LXC_DHCP_CONFILE=""
+LXC_DOMAIN=""" >  /etc/default/lxc-net		
+    systemctl enable lxc-net    
+    systemctl restart lxc-net
+#dealing with lxc-containers
+    lxc-create -t download -n centos1 -- --dist centos --release 8 --arch amd64
+    lxc-create -t download -n centos2 -- --dist centos --release 8 --arch amd64
+    lxc-start -n centos1
+    lxc-start -n centos2
+    sleep 10
+    lxc-attach centos1 -- dnf -y install httpd php
+	lxc-attach centos1 -- systemctl enable httpd php-fpm
+	lxc-attach centos2 -- dnf -y install httpd php
+	lxc-attach centos2 -- systemctl enable httpd php-fpm
+	mkdir -p /var/lib/lxc/centos1/rootfs/var/www/01-demosite-static
+    cp /vagrant/01-demosite-static/index.html /var/lib/lxc/centos1/rootfs/var/www/01-demosite-static/
+	cp /vagrant/apache_conf/01-demosite-static.conf /var/lib/lxc/centos1/rootfs/etc/httpd/conf.d/
+    lxc-attach centos1 -- systemctl restart httpd
+	mkdir -p /var/lib/lxc/centos2/rootfs/var/www/01-demosite-php
+    cp /vagrant/01-demosite-php/index.php /var/lib/lxc/centos2/rootfs/var/www/01-demosite-php/
+	cp /vagrant/apache_conf/01-demosite-php.conf /var/lib/lxc/centos2/rootfs/etc/httpd/conf.d/
+	lxc-attach centos2 -- systemctl restart httpd
+	iptables -t nat -I PREROUTING -i eth0 -p tcp --dport 80 -j DNAT --to-destination $(lxc-info -n centos1 -iH):80
+	iptables -t nat -I PREROUTING -i eth0 -p tcp --dport 81 -j DNAT --to-destination $(lxc-info -n centos2 -iH):80
+  SHELL
 end
