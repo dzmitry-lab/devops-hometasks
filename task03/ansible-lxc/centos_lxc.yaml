@@ -30,10 +30,16 @@
           yum install -y httpd
           yum install -y php php-cli php-mysqlnd php-json php-gd php-ldap php-odbc php-pdo php-opcache php-pear php-xml php-xmlrpc php-mbstring php-snmp php-soap php-zip
           yum install -y openssh-server
+          yum install -y sudo
+          systemctl start httpd
+          systemctl start php-fpm
+          systemctl start sshd
+          systemctl enable httpd
+          systemctl enable php-fpm
+          systemctl enable sshd
           yum install -y python2
           alternatives --set python /usr/bin/python2
-          systemctl start httpd && systemctl start php-fpm && systemctl start sshd
-          systemctl enable httpd && systemctl enable php-fpm && systemctl enable sshd
+          sleep 5
 
 - hosts: all
   connection: local
@@ -41,7 +47,7 @@
   tasks:
   
   - name: checking container key is up to date in known_hosts
-    shell: ssh-keygen -R {{ ansible_host }}; (ssh-keyscan {{ ansible_host }} >> ~/.ssh/known_hosts)
+    shell: sleep 10; ssh-keygen -R {{ ansible_host }}; (ssh-keyscan {{ ansible_host }} >> ~/.ssh/known_hosts)
   
   - name: copying web-files to all containers
     shell:
@@ -62,4 +68,4 @@
 - hosts: all
   tasks:
   - name: restart httpd
-    command: systemctl restart httpd
+    shell: systemctl restart httpd

@@ -1,0 +1,141 @@
+---
+#Playbook for task03-03 Drupal
+- name: Debian10_lxc provision
+  hosts: all
+
+  tasks:
+     - name: Ensure needed packages are installed.
+       become: yes
+       apt:
+         pkg:
+           - lxc
+           - lxc-templates
+           - python
+           - python-lxc
+           - python-pip           
+           - iptables-persistent
+        
+     - name: Ensure services are running and enabled
+       become: yes
+       service:
+         name: "{{ item }}"
+         state: started
+         enabled: yes
+       loop:
+       - lxc-net
+       - lxc
+    
+     - name: Modify /etc/sysctl.conf
+       become: yes
+       lineinfile:
+         path: /etc/sysctl.conf
+         regexp: 'kernel.unprivileged_userns_clone=1'
+         state: present
+         insertafter: EOF
+         line: kernel.unprivileged_userns_clone=1
+
+     - name: modifying kernel for current session
+       become: yes
+       shell: sysctl kernel.unprivileged_userns_clone=1
+       
+     - name: Modify /etc/default/grub
+       become: yes
+       replace:
+         path: /etc/default/grub
+         regexp: 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 debian-installer=en_US.UTF-8"'
+         replace: 'GRUB_CMDLINE_LINUX="net.ifnames=0 systemd.legacy_systemd_cgroup_controller=yes biosdevname=0 debian-installer=en_US.UTF-8"'
+         
+     - name: updating grub
+       become: yes
+       shell: update-grub
+
+     - name: Adding changes to /etc/lxc/default.conf
+       become: yes
+       copy:
+         dest: /etc/lxc/default.conf
+         content: |
+           lxc.net.0.type  = veth
+           lxc.net.0.flags = up
+           lxc.net.0.link  = lxcbr0
+
+     - name: Adding changes to /etc/lxc/lxc-usernet
+       become: yes
+       copy:
+         dest: /etc/lxc/lxc-usernet
+         content: |
+           root veth lxcbr0 10
+           
+     - name: Adding changes to /etc/default/lxc-net
+       become: yes
+       copy:
+         dest: /etc/default/lxc-net
+         content: |
+           USE_LXC_BRIDGE="true"
+           LXC_BRIDGE="lxcbr0"
+
+     - name: restart lxc-net
+       become: yes
+       service:
+         name: lxc-net
+         state: restarted
+        
+     - name: Forward port 80 to 10.0.3.55:80
+       become: yes
+       iptables:
+         table: nat
+         chain: PREROUTING
+         in_interface: eth0
+         protocol: tcp
+         destination_port: '80'
+         jump: DNAT
+         to_destination: 10.0.3.55:80
+
+     - name: save iptables
+       become: yes
+       shell: iptables-save > /etc/iptables/rules.v4
+         
+     - name: generate SSH key
+       become: yes
+       user:
+         name: "root"
+         generate_ssh_key: yes
+         ssh_key_bits: 2048
+         ssh_key_file: "~/.ssh/id_rsa"
+         force: no
+
+     - name: Modify /etc/ansible/ansible.cfg
+       become: yes
+       replace:
+         path: /etc/ansible/ansible.cfg
+         regexp: '^#pipelining = False'
+         replace: 'pipelining = True'
+
+     - name: adding roles for ansible
+       shell:  ansible-galaxy install {{ item }} 
+       loop:
+         - geerlingguy.mysql
+         - geerlingguy.apache
+         - geerlingguy.php-versions
+         - geerlingguy.php
+         - geerlingguy.php-mysql
+         - geerlingguy.composer
+         - geerlingguy.drush
+         - geerlingguy.drupal
+         
+     - name: copy modified configure-file for mysql task
+       copy:
+         src: /vagrant/configure.yml
+         dest: /root/.ansible/roles/geerlingguy.mysql/tasks/
+         owner: root
+         group: root
+         force: yes
+
+     - name: sleep 15
+       shell: sleep 15
+       
+     - name: execute playbook to configure lxc-containers
+       shell: ansible-playbook -i /vagrant/inventory /vagrant/containers_lxc.yml | sed 's/\x1B\[[0-9;]\+[A-Za-z]//g'
+       register: playbook_output
+       changed_when: playbook_output.stdout_lines[-1] is regex("\schanged=[1-9]\d*\s")
+
+     - debug: var=playbook_output.stdout_lines

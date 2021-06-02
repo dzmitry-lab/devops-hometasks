@@ -1,0 +1,153 @@
+---
+#Playbook for task03-03 Drupal containers
+- hosts: all
+  connection: local
+  become: true
+  tasks:
+    - name: SSH key pub copy
+      set_fact:
+        my_ssh_key: "{{ lookup('env','HOME') }}/.ssh/id_rsa.pub"
+ 
+    - name: Create containers
+      lxc_container:
+        name: "{{ inventory_hostname }}"
+        container_log: true
+        template: download
+        state: started
+        template_options:  --dist centos --release 7 --arch amd64
+        container_command: |
+          if [ ! -d ~/.ssh ]; then
+          mkdir ~/.ssh
+          echo "{{ lookup('file', my_ssh_key) }}" | tee -a ~/.ssh/authorized_keys
+          fi
+          sed -i 's/dhcp/none/' /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "IPADDR={{ ansible_host }}" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "PREFIX=24" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "GATEWAY=10.0.3.1" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+          echo "nameserver 10.0.3.1" >> /etc/resolv.conf
+          systemctl restart NetworkManager.service
+          ifup eth0
+          sleep 5
+          yum install -y openssh-server
+          systemctl start sshd
+          yum install -y sudo
+ 
+    - name: Checking container key is up to date in known_hosts
+      shell: sleep 10; ssh-keygen -R {{ ansible_host }}; (ssh-keyscan {{ ansible_host }} >> ~/.ssh/known_hosts)
+          
+- hosts: db
+  become: true
+  tasks:
+  vars_files:
+     - vars/main_db.yml
+  roles:
+     - role: geerlingguy.mysql
+  pre_tasks:
+     - name: Install the items
+       yum:
+         name: "{{ item }}"
+         state: present
+       loop:
+         - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+         - https://rpms.remirepo.net/enterprise/remi-release-7.rpm
+      
+     - name: Configure MariaDB Repository
+       yum_repository:
+         name: mariadb-main
+         description: MariaDB Server
+         baseurl: https://downloads.mariadb.com/MariaDB/mariadb-10.5/yum/rhel/7/x86_64
+         gpgkey: https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
+         gpgcheck: true
+         state: present 
+           
+- hosts: web
+  become: true
+  vars_files:
+     - vars/main_web.yml
+  roles:
+     - geerlingguy.apache
+     - geerlingguy.php-versions
+     - geerlingguy.php
+     - geerlingguy.php-mysql
+  
+  pre_tasks:
+     - name: Install the items
+       yum:
+         name: "{{ item }}"
+         state: present
+       loop:
+         - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+         - https://rpms.remirepo.net/enterprise/remi-release-7.rpm
+         - wget
+         
+     - name: variable for composer
+       shell: export COMPOSER_ALLOW_SUPERUSER=1;
+       
+  tasks:
+     - name: Modify /etc/httpd/conf.d/vhosts.conf
+       become: yes
+       replace:
+         path: /etc/httpd/conf.d/vhosts.conf
+         regexp: '/var/www/html'
+         replace: '/var/www/html/drupal'
+          
+     - name: Download last site from drupal site
+       get_url:
+         url: https://www.drupal.org/download-latest/tar.gz
+         dest: /root/tar.gz
+      
+     - name: Extract tar.gz
+       become: yes
+       unarchive:
+          src: /root/tar.gz
+          dest: /root/
+          remote_src: yes
+    
+     - name: Moving drupal site to /var/www/html
+       shell: mv /root/drupal-*/ /var/www/html/drupal
+       
+     - name: Creates directory
+       file:
+         path: /var/www/html/drupal/sites/default/files
+         state: directory
+         owner: root
+         
+     - name: copy drupal site file settings
+       become: yes
+       copy:
+         src: /var/www/html/drupal/sites/default/default.settings.php
+         dest: /var/www/html/drupal/sites/default/settings.php
+         remote_src: yes
+          
+     - name: Adding changes to /var/www/html/drupal/sites/default/settings.php
+       become: yes
+       blockinfile:
+         path: /var/www/html/drupal/sites/default/settings.php
+         block: |
+           $databases['default']['default'] = array (
+             'database' => 'drupal',
+             'username' => 'drupal_user',
+             'password' => 'druPaaaL_user_Passw0RD',
+             'prefix' => '',
+             'host' => '10.0.3.56',
+             'port' => '',
+             'namespace' => 'Drupal\\Core\\Database\\Driver\\mysql',
+             'driver' => 'mysql',
+             );
+
+     - name: Recursively change ownership of a directory
+       become: yes
+       file:
+         path: /var/www/html/
+         state: directory
+         recurse: yes
+         owner: apache
+         group: apache
+         mode: '0755'
+     
+     - name: Restart apache
+       become: yes
+       service:
+         name: httpd
+         state: restarted    
+       

@@ -1,0 +1,16 @@
+mysql_enablerepo: "mariadb-main"
+mysql_root_password: "abracadabra333441!!18F"
+mysql_databases:
+  - name: drupal
+    encoding: latin1
+    collation: latin1_general_ci
+ 
+mysql_users:
+  - name: drupal_user
+    host: "%"
+    password: druPaaaL_user_Passw0RD
+    priv: "drupal.*:ALL"
+
+mysql_slow_query_log_enabled: true
+mysql_slow_query_log_file: slow_query.log
+mysql_slow_query_time: 5
