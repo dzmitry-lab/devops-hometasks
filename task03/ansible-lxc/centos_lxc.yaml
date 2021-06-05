@@ -21,31 +21,23 @@
           mkdir ~/.ssh
           echo "{{ lookup('file', my_ssh_key) }}" | tee -a ~/.ssh/authorized_keys
           fi
+          echo "nameserver 10.0.3.1" > /etc/resolv.conf
           sed -i 's/dhcp/none/' /etc/sysconfig/network-scripts/ifcfg-eth0
           echo "IPADDR={{ ansible_host }}" >> /etc/sysconfig/network-scripts/ifcfg-eth0
           echo "PREFIX=24" >> /etc/sysconfig/network-scripts/ifcfg-eth0
           echo "GATEWAY=10.0.3.1" >> /etc/sysconfig/network-scripts/ifcfg-eth0
-          echo "nameserver 10.0.3.1" >> /etc/resolv.conf
+          echo "DNS1=10.0.3.1" >> /etc/sysconfig/network-scripts/ifcfg-eth0
           systemctl restart NetworkManager.service
-          yum install -y httpd
-          yum install -y php php-cli php-mysqlnd php-json php-gd php-ldap php-odbc php-pdo php-opcache php-pear php-xml php-xmlrpc php-mbstring php-snmp php-soap php-zip
-          yum install -y openssh-server
-          yum install -y sudo
-          systemctl start httpd
-          systemctl start php-fpm
-          systemctl start sshd
-          systemctl enable httpd
-          systemctl enable php-fpm
-          systemctl enable sshd
-          yum install -y python2
-          alternatives --set python /usr/bin/python2
           sleep 5
+          yum install -y sudo openssh-server httpd php python2
+          alternatives --set python /usr/bin/python2
+          systemctl start sshd
 
 - hosts: all
   connection: local
   become: true
   tasks:
-  
+
   - name: checking container key is up to date in known_hosts
     shell: sleep 10; ssh-keygen -R {{ ansible_host }}; (ssh-keyscan {{ ansible_host }} >> ~/.ssh/known_hosts)
   
@@ -53,6 +45,18 @@
     shell:
       cmd:  scp -r /vagrant/web/ root@{{ ansible_host }}:/var/www/
 
+- hosts: all
+  become: true
+  tasks:
+  - name: Ensure services are running and enabled
+    service:
+      name: "{{ item }}"
+      state: started
+      enabled: yes
+    loop:
+       - httpd
+       - php-fpm
+       
 - hosts: centos1
   connection: local
   tasks:
@@ -68,4 +72,6 @@
 - hosts: all
   tasks:
   - name: restart httpd
-    shell: systemctl restart httpd
+    service: 
+      name: httpd
+      state: restarted
