@@ -1,2 +1,7 @@
 centos1 ansible_host=10.0.3.55
 centos2 ansible_host=10.0.3.56
+
+[all:vars]
+ansible_user=vagrant
+ansible_password=vagrant
+ansible_sudo_pass=vagrant
