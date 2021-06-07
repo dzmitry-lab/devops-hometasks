@@ -20,13 +20,13 @@
     copy:
       src: /vagrant/apache_conf/01-demosite-static.conf
       dest: /etc/httpd/conf.d/
-    delegate_to: centos1
+    when: inventory_hostname == "centos1"
 
   - name: Copy configs to centos2
     copy:
       src: /vagrant/apache_conf/01-demosite-php.conf
       dest: /etc/httpd/conf.d/
-    delegate_to: centos2
+    when: inventory_hostname == "centos2"
 
   - name: Restart apache
     service:
