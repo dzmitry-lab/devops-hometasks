@@ -1,0 +1,158 @@
+---
+#Playbook for task04 (puppet)
+- name: Centos8 master provision
+  hosts: master
+  connection: local
+  become: true
+  tasks:
+    - name: Import a gpg key for puppet
+      rpm_key:
+        state: present
+        key: https://yum.puppet.com/RPM-GPG-KEY-puppet-20250406
+
+    - name: Ensure needed packages are installed.
+      dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+        - https://yum.puppet.com/puppet6-release-el-8.noarch.rpm
+        - puppetserver
+
+    - name: Modify /etc/sysconfig/puppetserver
+      replace:
+        path: /etc/sysconfig/puppetserver
+        regexp: '2g'
+        replace: '256m'
+      notify:
+        - restart puppetserver
+        
+    - name: install r10k package with gem
+      shell: /opt/puppetlabs/puppet/bin/gem install r10k
+
+    - name: Create directory
+      file:
+        path: /etc/puppetlabs/r10k
+        state: directory
+        owner: root
+
+    - name: Create r10k.yaml
+      copy:
+        dest: /etc/puppetlabs/r10k/r10k.yaml
+        content: |
+          :cachedir: '/var/cache/r10k'
+          :sources:
+            :my-org:
+              :remote: 'https://github.com/dzmitry-lab/control-repo'
+              :basedir: '/etc/puppetlabs/code/environments' 
+
+    - name: r10k deploy environment
+      shell: /opt/puppetlabs/puppet/bin/r10k deploy environment -p
+
+    - name: adding job to cron
+      cron: 
+        name="r10k deploy"
+        minute=*/5
+        user=root
+        job="/opt/puppetlabs/puppet/bin/r10k deploy environment -p > /dev/null"
+        
+    - name: Enable autosign ca puppet
+      become: yes
+      lineinfile:
+        path: /etc/puppetlabs/puppet/puppet.conf
+        regexp: '^autosign = true'
+        state: present
+        insertafter: EOF
+        line: 'autosign = true'
+      notify:
+        - restart puppetserver
+        
+    - name: Checking container key is up to date in known_hosts
+      become_user: vagrant
+      shell: ssh-keyscan {{ item }} >> ~/.ssh/known_hosts
+      loop:
+        - '192.168.4.11'
+        - '192.168.4.12'
+        - '192.168.4.13'
+
+    - name: Modify /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        block: |
+           127.0.0.1 puppet
+
+    - name: Adding changes to /etc/puppetlabs/puppet/puppet.conf
+      blockinfile:
+        path: /etc/puppetlabs/puppet/puppet.conf
+        block: |
+           [agent]
+           server = master.puppet
+           runinterval = 1m
+      notify:
+        - restart puppet
+      
+    - name: Ensure puppetserver is enabled  
+      service:
+        name: puppetserver
+        enabled: yes
+        
+    - name: Making some magic
+      shell: sleep 15
+
+  handlers:
+    - name: restart puppetserver
+      service:
+        name: puppetserver
+        state: restarted
+        enabled: yes
+ 
+    - name: restart puppet
+      service:
+        name: puppet
+        state: restarted
+        enabled: yes
+
+- name: Centos8 slaves provision
+  hosts: slaves
+  user: vagrant
+  gather_facts: no
+  connection: ssh
+  become: true
+  tasks:
+    - name: Import a gpg key for puppet
+      rpm_key:
+        state: present
+        key: https://yum.puppet.com/RPM-GPG-KEY-puppet-20250406
+
+    - name: Ensure needed packages are installed.
+      dnf:
+        name: "{{ item }}"
+        disable_gpg_check: yes
+        state: present
+      loop:
+        - https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+        - https://yum.puppet.com/puppet6-release-el-8.noarch.rpm
+        - puppet-agent
+        
+    - name: Modify /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        block: |
+           192.168.4.10 master.puppet puppet
+         
+    - name: Adding changes to /etc/puppetlabs/puppet/puppet.conf
+      blockinfile:
+        path: /etc/puppetlabs/puppet/puppet.conf
+        block: |
+           [agent]
+           server = master.puppet
+           runinterval = 1m
+      notify:
+        - restart puppet
+
+  handlers:
+    - name: restart puppet
+      service:
+        name: puppet
+        state: restarted
+        

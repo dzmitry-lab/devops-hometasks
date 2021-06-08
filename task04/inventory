@@ -1,0 +1,6 @@
+[master]
+master.puppet ansible_host=192.168.4.10
+
+[slaves]
+slave1.puppet ansible_host=192.168.4.11 ansible_user=vagrant ansible_password=vagrant ansible_sudo_pass=vagrant
+slave2.puppet ansible_host=192.168.4.12 ansible_user=vagrant ansible_password=vagrant ansible_sudo_pass=vagrant
