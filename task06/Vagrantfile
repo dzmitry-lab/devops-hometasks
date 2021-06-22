@@ -1,0 +1,47 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "geerlingguy/centos8"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "512"
+  end
+
+  config.vm.define "nexus" do |nexus|
+    nexus.vm.hostname = "nexus"
+    nexus.vm.network "private_network", ip: "192.168.5.11"
+    nexus.vm.provider "virtualbox" do |vb|
+      vb.memory = "2048"
+      vb.cpus = "2"
+    end
+  end
+  
+  config.vm.define "staging" do |staging|
+    staging.vm.hostname = "staging"
+    staging.vm.network "private_network", ip: "192.168.5.12"
+  end
+
+  config.vm.define "production" do |production|
+    production.vm.hostname = "production"
+    production.vm.network "private_network", ip: "192.168.5.13"
+  end
+
+  config.vm.define "jenkins" do |jenkins|
+    jenkins.vm.hostname = "jenkins"
+    jenkins.vm.network "private_network", ip: "192.168.5.10"
+    jenkins.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = "2"
+    end
+    jenkins.vm.provision "ansible_local" do |ansible|
+      ansible.playbook = "playbook.yml"
+      ansible.become = true
+      ansible.inventory_path = "./inventory"
+      ansible.limit = 'all'
+      ansible.galaxy_role_file = "./requirements.yml"
+      ansible.galaxy_roles_path = '/home/vagrant/.ansible/roles/'
+      ansible.galaxy_command = 'ansible-galaxy install --role-file=%{role_file} --roles-path=%{roles_path}'
+    end
+  end
+end

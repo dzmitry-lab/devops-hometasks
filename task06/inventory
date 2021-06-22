@@ -1,0 +1,9 @@
+[jenkinses]
+jenkins ansible_host=192.168.5.10
+
+[nexuses]
+nexus ansible_host=192.168.5.11 ansible_user=vagrant ansible_password=vagrant ansible_sudo_pass=vagrant
+
+[nodes]
+staging ansible_host=192.168.5.12 ansible_user=vagrant ansible_password=vagrant ansible_sudo_pass=vagrant
+production ansible_host=192.168.5.13 ansible_user=vagrant ansible_password=vagrant ansible_sudo_pass=vagrant

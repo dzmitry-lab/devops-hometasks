@@ -1,0 +1,27 @@
+# roles/production/tasks/main.yml
+---
+- name: Create directory /opt/wordcloud
+  file:
+    path: /opt/wordcloud
+    state: directory
+    owner: vagrant
+    group: vagrant
+
+- name: Create wordcloud.service
+  copy:
+    dest: /etc/systemd/system/wordcloud.service
+    content: |
+      [Unit]
+      Description=WordCloudGenerator
+      [Service]
+      WorkingDirectory=/opt/wordcloud
+      ExecStart=/opt/wordcloud/word-cloud-generator
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Start wordcloud
+  systemd:
+    state: started
+    daemon_reload: yes
+    name: wordcloud.service
