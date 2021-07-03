@@ -1,0 +1,13 @@
+# dockerfile
+FROM golang:1.13.15 AS build
+
+RUN mkdir /wcg; \
+	cd /wcg; \
+	git clone https://github.com/L-Eugene/word-cloud-generator.git .; \
+	make
+
+CMD /wcg/artifacts
+
+FROM alpine:latest
+COPY --from=build /wcg/artifacts/linux/word-cloud-generator .
+CMD /word-cloud-generator
