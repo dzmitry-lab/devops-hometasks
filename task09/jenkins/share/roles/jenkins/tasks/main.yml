@@ -1,0 +1,100 @@
+# roles/jenkins/tasks/main.yml
+---
+- name: Ensure needed packages are installed.
+  apt:
+    pkg:
+    - build-essential
+    - gnupg
+    - curl
+    - wget
+    - git
+    - default-jdk
+    - jq
+    state: present
+    update_cache: true
+
+- name: Add an Apt signing key, uses whichever key is at the URL
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io.key
+    state: present
+
+- name: Add an jenkins repo
+  apt_repository:
+    repo: deb https://pkg.jenkins.io/debian-stable binary/
+    state: present
+
+- name: Install jenkins
+  apt:
+    name: jenkins
+    state: present
+
+- name: Jenkins Skip startUp for MI
+  lineinfile:
+    dest=/etc/default/jenkins 
+    regexp='^JAVA_ARGS='
+    line='JAVA_ARGS="-Djenkins.install.runSetupWizard=false -Dhudson.security.csrf.DefaultCrumbIssuer.EXCLUDE_SESSION_ID=true -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"'
+
+- name: Start jenkins
+  service:
+    name: jenkins
+    state: started
+    enabled: true
+    
+- name: Wait for Jenkins to start up
+  uri:
+    url: http://localhost:8080
+    status_code: 200
+    timeout: 5
+  register: jenkins_service_status
+  retries: 20
+  delay: 5
+  until: >
+     'status' in jenkins_service_status and
+     jenkins_service_status['status'] == 200
+
+- name: Sleep for 10 seconds
+  command: sleep 10
+  delegate_to: localhost
+     
+- name: Install plugins
+  jenkins_plugin:
+    name: "{{ item }}"
+  loop:  
+    - cloudbees-folder
+    - antisamy-markup-formatter
+    - build-timeout
+    - timestamper
+    - ws-cleanup
+    - gradle
+    - workflow-aggregator
+    - github-branch-source
+    - pipeline-github-lib
+    - pipeline-stage-view
+    - git
+    - ssh-slaves
+    - matrix-auth
+    - pam-auth
+    - ldap
+    - golang
+    - nexus-artifact-uploader
+    - ssh
+  register: plugin_result
+  until: plugin_result is success
+  retries: 5
+  delay: 10
+
+- name: Copy jobes and nodes configs
+  copy:
+    src: /tmp/share/jenkins/
+    dest: /var/lib/jenkins/
+    owner: jenkins
+    group: jenkins
+    
+- name: Sleep for 10 seconds
+  command: sleep 10
+  delegate_to: localhost
+  
+- name: Restart jenkins
+  service:
+    name: jenkins
+    state: restarted
