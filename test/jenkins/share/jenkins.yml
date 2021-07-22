@@ -1,9 +1,0 @@
----
-#Playbook for jenkins
-- name: jenkins provision
-  hosts: 127.0.0.1
-  connection: local
-  become: true
-  tasks:
-  - import_role:
-      name: jenkins
