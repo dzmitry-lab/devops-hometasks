@@ -1,0 +1,69 @@
+---
+#Playbook for nexus
+- name: nexus provision
+  hosts: 127.0.0.1
+  connection: local
+  become: true
+  pre_tasks:
+  - name: Ensure needed packages are installed.
+    apt:
+      pkg:
+      - build-essential
+      - gnupg
+      - gpg
+      - curl
+      - rsync
+      state: present
+      update_cache: true
+  - apt_key:
+      url: https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public
+  - apt_repository:
+      repo: deb https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/ buster main
+      state: present
+      update_cache: true
+  - apt:
+      name: adoptopenjdk-8-hotspot
+      state: present
+      
+  vars:
+    nexus_admin_password: "admin"
+    nexus_config_maven: false
+    nexus_config_raw: true
+    nexus_repos_raw_hosted:
+      - name: word-cloud-builds
+        strict_content_validation: false
+        version_policy: release
+        write_policy: allow
+    nexus_roles:
+      - id: wcg-uploaders
+        name: wcg-uploaders
+        description: wcg-uploaders
+        privileges:
+          - nx-repository-view-*-*-edit
+        roles: []
+      - id: wcg-downloaders
+        name: wcg-downloaders
+        description: wcg-downloaders
+        privileges:
+          - nx-repository-view-*-*-read
+        roles: []
+    nexus_local_users:
+      - username: uploader
+        state: present
+        first_name: uploader
+        last_name: uploader
+        email: support@company.com
+        password: "uploader"
+        roles:
+          - wcg-uploaders
+      - username: downloader
+        state: present
+        first_name: downloader
+        last_name: downloader
+        email: support@company.com
+        password: "downloader"
+        roles:
+          - wcg-downloaders
+
+  roles:
+    - role: ansible-thoteam.nexus3-oss
